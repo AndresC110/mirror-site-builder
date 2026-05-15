@@ -1,19 +1,85 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, createContext, useContext } from "react";
-import { Phone, MessageCircle, Star, MapPin, Mail, Menu, X, Scale, ShieldCheck, Clock } from "lucide-react";
+import {
+  Phone, MessageCircle, Star, MapPin, Mail, Menu, X,
+  Scale, ShieldCheck, Clock, Navigation,
+} from "lucide-react";
 
-const HERO_IMG = "https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&q=70&w=1600&fm=webp";
+/* ─── CONSTANTS ─────────────────────────────────────────────── */
+const HERO_IMG    = "https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&q=70&w=1600&fm=webp";
 const JUSTICE_IMG = "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=70&w=900&fm=webp";
-
-const WHATSAPP = "https://wa.me/17184140102";
-const PHONE_MAIN = "(833) 384-7375";
+const WHATSAPP    = "https://wa.me/17184140102";
+const PHONE_MAIN  = "(833) 384-7375";
 const PHONE_LOCAL = "(718) 414-0102";
+const EMAIL_TO    = "caicedoandres832@gmail.com";
+const MAPS_EMBED  = "https://maps.google.com/maps?q=2322+Arthur+Avenue+%23207,+Bronx,+NY+10458&output=embed&z=16";
+const MAPS_LINK   = "https://www.google.com/maps/dir/?api=1&destination=2322+Arthur+Avenue+%23207+Bronx+New+York+10458";
 
+const SUPABASE_URL = "https://xsobqoujijvaxcjukrjw.supabase.co";
+const SUPABASE_KEY = "sb_publishable_EdfllRdoVQBMzWSASRo4Sw_HPLlXUqt";
+
+/* ─── FORM SUBMISSION ────────────────────────────────────────── */
+interface LeadData {
+  name: string; email: string; phone: string; area: string; message: string;
+}
+
+async function submitLead(data: LeadData) {
+  let emailOk = false;
+  let dbOk    = false;
+
+  // 1) Email via FormSubmit — won't block DB if it fails
+  try {
+    const res = await fetch(`https://formsubmit.co/ajax/${EMAIL_TO}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        ...data,
+        _subject:  `Nuevo caso — ${data.area} — ${data.name}`,
+        _template: "table",
+        _captcha:  "false",
+      }),
+    });
+    emailOk = res.ok;
+    if (!emailOk) console.warn("FormSubmit error:", await res.text());
+  } catch (err) {
+    console.warn("Email send failed:", err);
+  }
+
+  // 2) Save to Supabase — won't block email if it fails
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "apikey":        SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Prefer":        "return=minimal",
+      },
+      body: JSON.stringify({
+        name:       data.name,
+        email:      data.email,
+        phone:      data.phone,
+        area:       data.area,
+        message:    data.message,
+        created_at: new Date().toISOString(),
+      }),
+    });
+    dbOk = res.ok || res.status === 201;
+    if (!dbOk) console.warn("Supabase error:", res.status, await res.text());
+  } catch (err) {
+    console.warn("DB save failed:", err);
+  }
+
+  // Only show error if BOTH fail completely
+  if (!emailOk && !dbOk) throw new Error("both_failed");
+}
+
+/* ─── TYPES & TRANSLATIONS ───────────────────────────────────── */
 type Lang = "es" | "en";
 
 const translations = {
   es: {
-    nav: { services: "Servicios", reviews: "Reseñas", contact: "Contacto" },
+    nav: { services: "Servicios", reviews: "Reseñas", contact: "Contacto", directions: "Ubicación" },
     hero: {
       eyebrow: "Team Abogados",
       title1: "Millones de Dólares",
@@ -61,14 +127,35 @@ const translations = {
       areas: ["Accidente de tráfico", "Derecho laboral", "Derecho familiar", "Derecho penal", "Inmigración", "Otro"],
       message: "Cuéntenos sobre su caso...",
       send: "Enviar",
+      sending: "Enviando...",
       received: "¡Mensaje Recibido!",
       receivedBody: "Un abogado le contactará dentro de las próximas 24 horas.",
+      error: "Error al enviar. Por favor intente de nuevo.",
+    },
+    directions: {
+      eyebrow: "Ubicación",
+      title: "Cómo Llegar",
+      address: "2322 Arthur Avenue #207, Bronx, New York 10458",
+      cta: "Cómo llegar",
     },
     footer: "Todos los derechos reservados.",
     fab: "Team Abogados",
+    chat: {
+      greeting: "Hola, déjenos saber en qué le podemos ayudar y un abogado le contactará pronto.",
+      name: "Nombre",
+      phone: "Teléfono",
+      email: "Email",
+      area: "Área legal...",
+      areas: ["Accidente de tráfico", "Derecho laboral", "Derecho familiar", "Derecho penal", "Inmigración", "Otro"],
+      message: "¿Cómo podemos ayudarle?",
+      send: "Enviar",
+      sending: "Enviando...",
+      sent: "¡Mensaje enviado! Un abogado le contactará pronto.",
+      error: "Error al enviar. Intente de nuevo.",
+    },
   },
   en: {
-    nav: { services: "Services", reviews: "Reviews", contact: "Contact" },
+    nav: { services: "Services", reviews: "Reviews", contact: "Contact", directions: "Location" },
     hero: {
       eyebrow: "Team Abogados",
       title1: "Millions of Dollars",
@@ -116,23 +203,42 @@ const translations = {
       areas: ["Traffic accident", "Labor law", "Family law", "Criminal law", "Immigration", "Other"],
       message: "Tell us about your case...",
       send: "Send",
+      sending: "Sending...",
       received: "Message Received!",
       receivedBody: "An attorney will contact you within the next 24 hours.",
+      error: "Error sending. Please try again.",
+    },
+    directions: {
+      eyebrow: "Location",
+      title: "Get Directions",
+      address: "2322 Arthur Avenue #207, Bronx, New York 10458",
+      cta: "Get Directions",
     },
     footer: "All rights reserved.",
     fab: "Team Abogados",
+    chat: {
+      greeting: "Hello, let us know how we can help and an attorney will contact you shortly.",
+      name: "Name",
+      phone: "Phone",
+      email: "Email",
+      area: "Legal area...",
+      areas: ["Traffic accident", "Labor law", "Family law", "Criminal law", "Immigration", "Other"],
+      message: "How can we help you?",
+      send: "Send",
+      sending: "Sending...",
+      sent: "Message sent! An attorney will contact you shortly.",
+      error: "Error sending. Please try again.",
+    },
   },
 };
 
 type T = typeof translations.es;
-
 const LangContext = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: T }>({
-  lang: "es",
-  setLang: () => {},
-  t: translations.es,
+  lang: "es", setLang: () => {}, t: translations.es,
 });
 const useLang = () => useContext(LangContext);
 
+/* ─── ROUTE ──────────────────────────────────────────────────── */
 export const Route = createFileRoute("/")({
   head: () => ({
     links: [{ rel: "preload", as: "image", href: HERO_IMG, fetchpriority: "high" } as any],
@@ -141,34 +247,27 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+/* ─── LANG SWITCH ────────────────────────────────────────────── */
 function LangSwitch({ className = "" }: { className?: string }) {
   const { lang, setLang } = useLang();
   return (
     <div className={`flex gap-3 text-sm font-medium tracking-wider ${className}`}>
-      <button
-        onClick={() => setLang("en")}
-        className={lang === "en" ? "text-gold underline underline-offset-4" : "text-cream/70 hover:text-gold"}
-      >
-        EN
-      </button>
+      <button onClick={() => setLang("en")} className={lang === "en" ? "text-gold underline underline-offset-4" : "text-cream/70 hover:text-gold"}>EN</button>
       <span className="text-cream/40">|</span>
-      <button
-        onClick={() => setLang("es")}
-        className={lang === "es" ? "text-gold underline underline-offset-4" : "text-cream/70 hover:text-gold"}
-      >
-        ES
-      </button>
+      <button onClick={() => setLang("es")} className={lang === "es" ? "text-gold underline underline-offset-4" : "text-cream/70 hover:text-gold"}>ES</button>
     </div>
   );
 }
 
+/* ─── HEADER ─────────────────────────────────────────────────── */
 function Header() {
   const [open, setOpen] = useState(false);
   const { t } = useLang();
   const links = [
     { href: "#servicios", label: t.nav.services },
-    { href: "#resenas", label: t.nav.reviews },
-    { href: "#contacto", label: t.nav.contact },
+    { href: "#resenas",   label: t.nav.reviews },
+    { href: "#contacto",  label: t.nav.contact },
+    { href: "#ubicacion", label: t.nav.directions },
   ];
   return (
     <header className="absolute top-0 left-0 right-0 z-30">
@@ -177,11 +276,9 @@ function Header() {
           <Scale className="h-6 w-6 text-gold" strokeWidth={1.5} />
           <span className="font-serif text-lg tracking-wide">TEAM ABOGADOS</span>
         </a>
-        <nav className="hidden items-center gap-10 md:flex">
+        <nav className="hidden items-center gap-8 md:flex">
           {links.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm font-medium tracking-wider text-cream/90 uppercase hover:text-gold transition-colors">
-              {l.label}
-            </a>
+            <a key={l.href} href={l.href} className="text-sm font-medium tracking-wider text-cream/90 uppercase hover:text-gold transition-colors">{l.label}</a>
           ))}
           <span className="text-sm text-cream/40">|</span>
           <LangSwitch />
@@ -197,9 +294,7 @@ function Header() {
         <div className="md:hidden bg-navy-deep/95 backdrop-blur border-t border-cream/10">
           <div className="px-6 py-4 flex flex-col gap-4">
             {links.map((l) => (
-              <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="text-cream/90 uppercase text-sm tracking-wider">
-                {l.label}
-              </a>
+              <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="text-cream/90 uppercase text-sm tracking-wider">{l.label}</a>
             ))}
           </div>
         </div>
@@ -208,6 +303,7 @@ function Header() {
   );
 }
 
+/* ─── HERO ───────────────────────────────────────────────────── */
 function Hero() {
   const { t } = useLang();
   return (
@@ -225,12 +321,10 @@ function Hero() {
         <p className="mt-8 text-base sm:text-lg text-cream/80 max-w-xl mx-auto leading-relaxed">{t.hero.subtitle}</p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
           <a href="tel:8333847375" className="inline-flex items-center justify-center gap-2 bg-gold text-navy-deep px-8 py-4 font-semibold tracking-wider text-sm uppercase hover:bg-gold-soft transition-colors">
-            <Phone className="h-4 w-4" />
-            {t.hero.call}: {PHONE_MAIN}
+            <Phone className="h-4 w-4" /> {t.hero.call}: {PHONE_MAIN}
           </a>
           <a href={WHATSAPP} target="_blank" rel="noopener" className="inline-flex items-center justify-center gap-2 bg-whatsapp text-white px-8 py-4 font-semibold tracking-wider text-sm uppercase hover:opacity-90 transition-opacity">
-            <MessageCircle className="h-4 w-4" />
-            WhatsApp
+            <MessageCircle className="h-4 w-4" /> WhatsApp
           </a>
         </div>
       </div>
@@ -238,12 +332,13 @@ function Hero() {
   );
 }
 
+/* ─── ACCIDENT SECTION ───────────────────────────────────────── */
 function AccidentSection() {
   const { t } = useLang();
   const features = [
     { icon: ShieldCheck, label: t.accident.f1 },
-    { icon: Clock, label: t.accident.f2 },
-    { icon: Scale, label: t.accident.f3 },
+    { icon: Clock,       label: t.accident.f2 },
+    { icon: Scale,       label: t.accident.f3 },
   ];
   return (
     <section id="servicios" className="bg-cream py-20 md:py-28">
@@ -279,6 +374,7 @@ function AccidentSection() {
   );
 }
 
+/* ─── REVIEWS ────────────────────────────────────────────────── */
 function Reviews() {
   const { t } = useLang();
   return (
@@ -318,10 +414,27 @@ function Reviews() {
   );
 }
 
+/* ─── CONTACT ────────────────────────────────────────────────── */
 function Contact() {
   const { t } = useLang();
-  const [sent, setSent] = useState(false);
-  const onSubmit = (e: React.FormEvent) => { e.preventDefault(); setSent(true); };
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [form, setForm] = useState({ name: "", email: "", phone: "", area: "", message: "" });
+
+  const onChange = (field: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setForm(f => ({ ...f, [field]: e.target.value }));
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus("sending");
+    try {
+      await submitLead(form);
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
+  };
+
   return (
     <section id="contacto" className="bg-cream py-20 md:py-28">
       <div className="mx-auto max-w-7xl px-6 grid md:grid-cols-2 gap-12">
@@ -355,7 +468,7 @@ function Contact() {
         </div>
         <div className="bg-white p-8 md:p-10 shadow-lg">
           <h3 className="font-serif text-2xl text-navy-deep">{t.contact.formTitle}</h3>
-          {sent ? (
+          {status === "sent" ? (
             <div className="mt-8 text-center py-12">
               <div className="text-4xl">✅</div>
               <h4 className="mt-4 font-serif text-2xl text-navy-deep">{t.contact.received}</h4>
@@ -363,15 +476,24 @@ function Contact() {
             </div>
           ) : (
             <form onSubmit={onSubmit} className="mt-6 space-y-4">
-              <input required placeholder={t.contact.name} className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
-              <input required type="email" placeholder={t.contact.email} className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
-              <input required type="tel" placeholder={t.contact.tel} className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
-              <select required defaultValue="" className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold">
+              <input required placeholder={t.contact.name} value={form.name} onChange={onChange("name")}
+                className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
+              <input required type="email" placeholder={t.contact.email} value={form.email} onChange={onChange("email")}
+                className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
+              <input required type="tel" placeholder={t.contact.tel} value={form.phone} onChange={onChange("phone")}
+                className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
+              <select required value={form.area} onChange={onChange("area")}
+                className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold">
                 <option value="" disabled>{t.contact.area}</option>
                 {t.contact.areas.map((a) => <option key={a}>{a}</option>)}
               </select>
-              <textarea required rows={4} placeholder={t.contact.message} className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
-              <button type="submit" className="w-full bg-navy-deep text-cream py-4 text-sm font-semibold tracking-wider uppercase hover:bg-navy transition-colors">{t.contact.send}</button>
+              <textarea required rows={4} placeholder={t.contact.message} value={form.message} onChange={onChange("message")}
+                className="w-full border border-border bg-white px-4 py-3 text-sm focus:outline-none focus:border-gold" />
+              {status === "error" && <p className="text-red-500 text-sm">{t.contact.error}</p>}
+              <button type="submit" disabled={status === "sending"}
+                className="w-full bg-navy-deep text-cream py-4 text-sm font-semibold tracking-wider uppercase hover:bg-navy transition-colors disabled:opacity-60">
+                {status === "sending" ? t.contact.sending : t.contact.send}
+              </button>
             </form>
           )}
         </div>
@@ -380,6 +502,46 @@ function Contact() {
   );
 }
 
+/* ─── DIRECTIONS / MAP SECTION ───────────────────────────────── */
+function DirectionsSection() {
+  const { t } = useLang();
+  const td = t.directions;
+  return (
+    <section id="ubicacion" className="bg-navy-deep py-20 md:py-28">
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <span className="text-xs font-semibold tracking-[0.3em] text-gold uppercase">{td.eyebrow}</span>
+          <h2 className="mt-4 font-serif text-4xl md:text-5xl text-cream">{td.title}</h2>
+          <div className="mt-4 flex items-center justify-center gap-2 text-cream/70">
+            <MapPin className="h-5 w-5 text-gold flex-shrink-0" />
+            <span>{td.address}</span>
+          </div>
+        </div>
+        <div className="overflow-hidden shadow-2xl border border-cream/10">
+          <iframe
+            src={MAPS_EMBED}
+            width="100%"
+            height="450"
+            style={{ border: 0, display: "block" }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            title="Team Abogados Office Location"
+          />
+        </div>
+        <div className="mt-8 text-center">
+          <a href={MAPS_LINK} target="_blank" rel="noopener"
+            className="inline-flex items-center gap-2 bg-gold text-navy-deep px-8 py-4 font-semibold tracking-wider text-sm uppercase hover:bg-gold-soft transition-colors">
+            <Navigation className="h-4 w-4" />
+            {td.cta}
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── FOOTER ─────────────────────────────────────────────────── */
 function Footer() {
   const { t } = useLang();
   return (
@@ -395,17 +557,96 @@ function Footer() {
   );
 }
 
-function WhatsAppFab() {
+/* ─── CHAT WIDGET (FAB + POPUP) ──────────────────────────────── */
+function ChatWidget() {
   const { t } = useLang();
+  const tc = t.chat;
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", phone: "", email: "", area: "", message: "" });
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const onChange = (field: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setForm(f => ({ ...f, [field]: e.target.value }));
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus("sending");
+    try {
+      await submitLead(form);
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
+  };
+
   return (
-    <a href={WHATSAPP} target="_blank" rel="noopener" aria-label="WhatsApp"
-      className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 bg-gold text-navy-deep px-5 py-3 rounded-full shadow-2xl font-semibold text-sm hover:bg-gold-soft transition-colors">
-      <span className="h-2 w-2 rounded-full bg-navy-deep animate-pulse" />
-      {t.fab}
-    </a>
+    <>
+      {open && (
+        <div
+          className="fixed bottom-[5.5rem] right-6 z-50 w-[340px] max-w-[calc(100vw-3rem)] rounded-2xl shadow-2xl overflow-hidden"
+          style={{ background: "#12122a", border: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+            <div className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-gold" strokeWidth={1.5} />
+              <span className="font-serif text-lg font-semibold text-gold">Team Abogados</span>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-white/80 text-sm leading-relaxed rounded-xl px-4 py-3 mb-4" style={{ background: "rgba(255,255,255,0.06)" }}>
+              {tc.greeting}
+            </p>
+            {status === "sent" ? (
+              <div className="text-center py-8">
+                <div className="text-3xl mb-3">✅</div>
+                <p className="text-white/80 text-sm">{tc.sent}</p>
+              </div>
+            ) : (
+              <form onSubmit={onSubmit} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <input required placeholder={tc.name} value={form.name} onChange={onChange("name")}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }} />
+                  <input required type="tel" placeholder={tc.phone} value={form.phone} onChange={onChange("phone")}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }} />
+                </div>
+                <input required type="email" placeholder={tc.email} value={form.email} onChange={onChange("email")}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }} />
+                <select required value={form.area} onChange={onChange("area")}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm text-white/80 focus:outline-none appearance-none"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                  <option value="" disabled style={{ background: "#12122a" }}>{tc.area}</option>
+                  {tc.areas.map(a => <option key={a} value={a} style={{ background: "#12122a" }}>{a}</option>)}
+                </select>
+                <textarea required rows={3} placeholder={tc.message} value={form.message} onChange={onChange("message")}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none resize-none"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }} />
+                {status === "error" && <p className="text-red-400 text-xs">{tc.error}</p>}
+                <button type="submit" disabled={status === "sending"}
+                  className="w-full bg-gold text-navy-deep rounded-lg py-3 font-semibold text-sm tracking-wider uppercase hover:bg-gold-soft transition-colors disabled:opacity-60">
+                  {status === "sending" ? tc.sending : tc.send}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+      <button onClick={() => setOpen(!open)}
+        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 bg-gold text-navy-deep px-5 py-3 rounded-full shadow-2xl font-semibold text-sm hover:bg-gold-soft transition-colors">
+        <span className="h-2 w-2 rounded-full bg-navy-deep animate-pulse" />
+        {t.fab}
+      </button>
+    </>
   );
 }
 
+/* ─── ROOT ───────────────────────────────────────────────────── */
 function Index() {
   const [lang, setLang] = useState<Lang>("es");
   const t = translations[lang];
@@ -417,8 +658,9 @@ function Index() {
         <AccidentSection />
         <Reviews />
         <Contact />
+        <DirectionsSection />
         <Footer />
-        <WhatsAppFab />
+        <ChatWidget />
       </div>
     </LangContext.Provider>
   );
