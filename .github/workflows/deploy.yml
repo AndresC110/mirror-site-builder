@@ -35,7 +35,7 @@ jobs:
         with:
           # TanStack Start typically builds to .output/public or dist
           # We will try .output/public which is the standard for this template
-          path: './.output/public'
+          path: './dist'
 
   deploy:
     needs: build_site
