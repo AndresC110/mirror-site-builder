@@ -201,9 +201,6 @@ function Header() {
                 {l.label}
               </a>
             ))}
-            <div className="pt-3 border-t border-cream/10">
-              <LangSwitch />
-            </div>
           </div>
         </div>
       )}
