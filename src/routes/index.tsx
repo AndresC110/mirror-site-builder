@@ -186,9 +186,12 @@ function Header() {
           <span className="text-sm text-cream/40">|</span>
           <LangSwitch />
         </nav>
-        <button onClick={() => setOpen(!open)} className="md:hidden text-cream" aria-label="Menu">
-          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        <div className="flex items-center gap-4 md:hidden">
+          <LangSwitch />
+          <button onClick={() => setOpen(!open)} className="text-cream" aria-label="Menu">
+            {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
       {open && (
         <div className="md:hidden bg-navy-deep/95 backdrop-blur border-t border-cream/10">
@@ -198,9 +201,6 @@ function Header() {
                 {l.label}
               </a>
             ))}
-            <div className="pt-3 border-t border-cream/10">
-              <LangSwitch />
-            </div>
           </div>
         </div>
       )}
