@@ -122,9 +122,11 @@ const translations = {
     footer: "All rights reserved.",
     fab: "Team Abogados",
   },
-} as const;
+};
 
-const LangContext = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: typeof translations.es }>({
+type T = typeof translations.es;
+
+const LangContext = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: T }>({
   lang: "es",
   setLang: () => {},
   t: translations.es,
