@@ -15,7 +15,11 @@ const EMAIL_TO    = "caicedoandres832@gmail.com";
 const MAPS_EMBED  = "https://maps.google.com/maps?q=2322+Arthur+Avenue+%23207,+Bronx,+NY+10458&output=embed&z=16";
 const MAPS_LINK   = "https://www.google.com/maps/dir/?api=1&destination=2322+Arthur+Avenue+%23207+Bronx+New+York+10458";
 
-const EDGE_FUNCTION_URL = "https://xsobqoujijvaxcjukrjw.supabase.co/functions/v1/submit-lead";
+const SUPABASE_URL    = "https://xsobqoujijvaxcjukrjw.supabase.co";
+const SUPABASE_KEY    = "sb_publishable_EdfllRdoVQBMzWSASRo4Sw_HPLlXUqt";
+const EJS_SERVICE     = "service_8yr6j68";
+const EJS_TEMPLATE    = "template_hxqlby4";
+const EJS_PUBLIC_KEY  = "6c2EbarVlp0Dj-8Af";
 
 /* ─── FORM SUBMISSION ────────────────────────────────────────── */
 interface LeadData {
@@ -23,15 +27,81 @@ interface LeadData {
 }
 
 async function submitLead(data: LeadData) {
-  async function submitLead(data: LeadData) {
-  const res = await fetch(EDGE_FUNCTION_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error ?? "unknown_error");
+  let emailOk = false;
+  let dbOk    = false;
+
+  // 1) Email via EmailJS
+  try {
+    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id:  EJS_SERVICE,
+        template_id: EJS_TEMPLATE,
+        user_id:     EJS_PUBLIC_KEY,
+        template_params: {
+          name:    data.name,
+          email:   data.email,
+          phone:   data.phone,
+          area:    data.area,
+          message: data.message,
+        },
+      }),
+    });
+    emailOk = res.status === 200;
+    if (!emailOk) console.warn("EmailJS error:", await res.text());
+  } catch (err) {
+    console.warn("Email failed:", err);
+  }
+
+  // 2) Save to Supabase
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "apikey":        SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Prefer":        "return=minimal",
+      },
+      body: JSON.stringify({ ...data, created_at: new Date().toISOString() }),
+    });
+    dbOk = res.ok || res.status === 201;
+    if (!dbOk) console.warn("Supabase error:", res.status, await res.text());
+  } catch (err) {
+    console.warn("DB failed:", err);
+  }
+
+  if (!emailOk && !dbOk) throw new Error("both_failed");
 }
+
+  // 2) Save to Supabase — won't block email if it fails
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "apikey":        SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Prefer":        "return=minimal",
+      },
+      body: JSON.stringify({
+        name:       data.name,
+        email:      data.email,
+        phone:      data.phone,
+        area:       data.area,
+        message:    data.message,
+        created_at: new Date().toISOString(),
+      }),
+    });
+    dbOk = res.ok || res.status === 201;
+    if (!dbOk) console.warn("Supabase error:", res.status, await res.text());
+  } catch (err) {
+    console.warn("DB save failed:", err);
+  }
+
+  // Only show error if BOTH fail completely
+  if (!emailOk && !dbOk) throw new Error("both_failed");
 }
 
 /* ─── TYPES & TRANSLATIONS ───────────────────────────────────── */
