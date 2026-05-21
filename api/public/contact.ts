@@ -1,9 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-const SUPABASE_URL = "https://xsobqoujijvaxcjukrjw.supabase.co";
-const SUPABASE_KEY = "sb_publishable_EdfllRdoVQBMzWSASRo4Sw_HPLlXUqt";
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -13,24 +8,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { name, email, phone, area, message } = req.body;
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+
+    const response = await fetch("https://xsobqoujijvaxcjukrjw.supabase.co/rest/v1/leads", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "apikey": "sb_publishable_EdfllRdoVQBMzWSASRo4Sw_HPLlXUqt",
+        "Authorization": "Bearer sb_publishable_EdfllRdoVQBMzWSASRo4Sw_HPLlXUqt",
         "Prefer": "return=minimal",
       },
       body: JSON.stringify({ name, email, phone, area, message, created_at: new Date().toISOString() }),
     });
+
     if (!response.ok) {
       const error = await response.text();
       console.error("Supabase error:", response.status, error);
-      return res.status(500).json({ error: "Failed to save lead" });
+      return res.status(500).json({ error: "Failed to save", detail: error });
     }
+
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("Handler error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: String(err) });
   }
 }
